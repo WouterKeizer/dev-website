@@ -1,0 +1,6 @@
+{
+    "svg.preview.background": "transparent",
+    "githubPullRequests.ignoredPullRequestBranches": [
+        "main"
+    ]
+}

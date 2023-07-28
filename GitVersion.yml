@@ -1,0 +1,4 @@
+next-version: 0.1
+legacy-semver-padding: 1
+build-metadata-padding: 1
+commits-since-version-source-padding: 1

@@ -1,0 +1,40 @@
+{{- if .Values.pr.number -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: app-github-pr-notification
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      containers:
+      - name: github-notification
+        image: curlimages/curl
+        command: ["/bin/sh", "-c"]
+        args:
+        - "curl -X POST 'http://github-status-updater.github-status-updater.svc.cluster.local/api/deployment/success?PrNumber={{ .Values.pr.number }}&CommitSha={{ .Values.pr.headSha }}&RepoName={{ .Values.pr.repoName }}&PublicUri=https%3A%2F%2F{{ .Values.config.externalHost }}'"
+      restartPolicy: Never
+  backoffLimit: 2
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: app-github-pr-notification-failed
+  annotations:
+    argocd.argoproj.io/hook: SyncFail
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      containers:
+      - name: github-notification
+        image: curlimages/curl
+        command: ["/bin/sh", "-c"]
+        args:
+        - "curl -X POST 'http://github-status-updater.github-status-updater.svc.cluster.local/api/deployment/failure?PrNumber={{ .Values.pr.number }}&CommitSha={{ .Values.pr.headSha }}&RepoName={{ .Values.pr.repoName }}&PublicUri=https%3A%2F%2Fargo.viya.it%2Fapplications%2Fargocd%2F{{ .Release.Namespace }}'"
+      restartPolicy: Never
+  backoffLimit: 2
+---
+{{- end -}}

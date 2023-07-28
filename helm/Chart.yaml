@@ -1,0 +1,6 @@
+apiVersion: v2
+name: viya-dev-website # Please don't use a . in this name!
+description: A test Helm chart for showing how it could work together
+type: application
+version: "0.0.1+replaced.by.yq.in.pipeline"  # This version here needs to be valid semver because ApplicationSet deployments will use this version number
+appVersion: "1.0.0"

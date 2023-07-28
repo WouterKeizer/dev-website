@@ -1,0 +1,14 @@
+﻿apiVersion: v1
+kind: Service
+metadata:
+  name: viya-dev-website
+  labels:
+    {{- include "viya-dev-website.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  selector:
+    {{- include "viya-public-dev.selectorLabels" . | nindent 4 }}

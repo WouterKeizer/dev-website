@@ -1,0 +1,10 @@
+replicaCount: 2
+image:
+  tag: "0.0.1+replaced.by.yq.in.pipeline"
+  name: viyacr.azurecr.io/viya-public-website
+config:
+  externalHost: viya.it
+pr: # User for pull request deployments
+  number: '' # set only in PR builds
+  headSha: '' # set only in PR builds
+  repoName: viya-dev-website

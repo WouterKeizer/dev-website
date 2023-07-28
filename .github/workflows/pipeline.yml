@@ -1,0 +1,109 @@
+name: create-viya-dev-website
+on: 
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  REGISTRY: viyacr.azurecr.io
+  IMAGE_NAME: ${{ github.event.repository.name }}
+  CHARTMUSEUM_URL: https://helm.viya.it
+  CHARTMUSEUM_USER: bob
+
+permissions:
+  id-token: write
+  contents: write
+  checks: write
+  issues: read
+  pull-requests: write
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps: 
+
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v0.9.15
+      with:
+        versionSpec: '5.x'
+
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: 'true'
+        fetch-depth: 0
+
+    - name: set custom sub for oidc token (https://support.github.com/ticket/personal/0/1926927)
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        echo '{"use_default": false, "include_claim_keys":["repository_owner","context"]}' | \
+          gh api -X PUT /repos/{owner}/{repo}/actions/oidc/customization/sub --silent --input -
+
+    - name: 'Azure login (federated)'
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        allow-no-subscriptions: true
+
+    - name: 'Azure Container Registry (ACR) login'
+      run: |
+        az acr login -n viyacr \
+          --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID_VIYA_PRODUCTION }}
+    
+    - name: Determine Version
+      uses: gittools/actions/gitversion/execute@v0.9.15
+      with:
+        useConfigFile: true
+
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=raw,value=${{ env.GitVersion_SemVer }}
+          type=raw,value=head-sha-${{ github.event.pull_request.head.sha }},enable=${{ github.event_name == 'pull_request' }}
+          type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Push helm chart
+      run: |
+        HELM_PATH=./helm
+        CHART_NAME=${{ env.IMAGE_NAME }}
+        CHART_FILE=$CHART_NAME-${{ env.GitVersion_SemVer }}.tgz
+        echo "Package chart $CHART_NAME at $HELM_PATH with build number ${{ env.GitVersion_SemVer }}"
+
+        cd $HELM_PATH
+        yq -i '.version="${{ env.GitVersion_SemVer }}"' ./Chart.yaml
+        yq -i '.image.tag="${{ env.GitVersion_SemVer }}"' ./values.yaml
+
+        helm package .
+
+        helm push $CHART_FILE oci://$REGISTRY/helm
+        echo "Pushing chart to ${{ env.CHARTMUSEUM_URL}} ('old' v2 style helm repo because argo only supports that)"
+        curl --data-binary \
+          "@$CHART_FILE" \
+          ${{ env.CHARTMUSEUM_URL}}/api/charts \
+          -u "${{ env.CHARTMUSEUM_USER}}:${{ secrets.CHARTMUSEUM_PASSWORD}}" \
+          -w 'Upload completed with http_code %{http_code}\n' --silent
+
+    - name: Create Tag
+      if: github.ref_name == 'main'
+      uses: negz/create-tag@v1
+      with:
+        version: ${{ env.GitVersion_SemVer }}
+        message: 'Auto tagging version ${{ env.GitVersion_SemVer }}'
+        token: ${{ secrets.GITHUB_TOKEN }}

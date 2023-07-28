@@ -1,0 +1,39 @@
+{{- $externalHost := required ".Values.config.externalHost is required" .Values.config.externalHost -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app-ingress  
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: zerossl-prod
+spec:
+  ingressClassName: nginx
+
+  rules:
+  - host: "{{ $externalHost }}"
+    http:  
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: viya-dev-website
+            port:
+              number: 80
+
+  - host: "www.{{ $externalHost }}"
+    http:  
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: viya-dev-website
+            port:
+              number: 80
+  tls:
+  - hosts:
+    - "{{ $externalHost }}"
+    - "www.{{ $externalHost }}"
+    secretName: tls-nginx-ingress
